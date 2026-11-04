@@ -27,7 +27,7 @@ NOLIBGCC_CFLAGS = $(NOLIBGCC_CPU) -mpcrel -Os -ffreestanding -std=gnu99 \
 
 NOLIBGCC_LIB = $(O)libnolibgcc.a
 
-NOLIBGCC_OBJS = $(addprefix $(O),mulsi3.o)
+NOLIBGCC_OBJS = $(addprefix $(O),mulsi3.o divsi3.o)
 
 .PHONY: all
 all: $(NOLIBGCC_LIB)
