@@ -23,6 +23,7 @@ typedef __UINT64_TYPE__ nolibgcc_u64;
 
 /* The magnitude of a signed value, unsigned so the most negative one fits */
 #define nolibgcc__abs32(x) ((x) < 0 ? -(nolibgcc_u32)(x) : (nolibgcc_u32)(x))
+#define nolibgcc__abs64(x) ((x) < 0 ? -(nolibgcc_u64)(x) : (nolibgcc_u64)(x))
 
 /* What's in the library */
 nolibgcc_u32 __mulsi3(nolibgcc_u32 a, nolibgcc_u32 b) NOLIBGCC_LIB;
@@ -33,6 +34,12 @@ nolibgcc_u32 __umodsi3(nolibgcc_u32 a, nolibgcc_u32 b) NOLIBGCC_LIB;
 nolibgcc_u32 __nolibgcc_udivmodsi4(nolibgcc_u32 n, nolibgcc_u32 d,
 				   nolibgcc_u32 *rem) NOLIBGCC_LIB;
 nolibgcc_s64 __muldi3(nolibgcc_s64 a, nolibgcc_s64 b) NOLIBGCC_LIB;
+nolibgcc_s64 __divdi3(nolibgcc_s64 a, nolibgcc_s64 b) NOLIBGCC_LIB;
+nolibgcc_s64 __moddi3(nolibgcc_s64 a, nolibgcc_s64 b) NOLIBGCC_LIB;
+nolibgcc_u64 __udivdi3(nolibgcc_u64 a, nolibgcc_u64 b) NOLIBGCC_LIB;
+nolibgcc_u64 __umoddi3(nolibgcc_u64 a, nolibgcc_u64 b) NOLIBGCC_LIB;
+nolibgcc_u64 __nolibgcc_udivmoddi4(nolibgcc_u64 n, nolibgcc_u64 d,
+				   nolibgcc_u64 *rem) NOLIBGCC_LIB;
 
 /*
  * The building blocks. Nothing here may use the operation it implements or
@@ -107,6 +114,24 @@ NOLIBGCC_INLINE nolibgcc_u32 nolibgcc__udivmod32_16(nolibgcc_u32 n, nolibgcc_u16
 	return hi << 16 | (lo & 0xffff);
 }
 
+/* The same for a 64 bit n */
+NOLIBGCC_INLINE nolibgcc_u64 nolibgcc__udivmod64_16(nolibgcc_u64 n, nolibgcc_u16 d,
+						    nolibgcc_u64 *rem)
+{
+	nolibgcc_u32 r, qh, ql;
+
+	qh = nolibgcc__udivmod32_16(n >> 32, d, &r);
+	r = nolibgcc__divu16(r << 16 | (nolibgcc_u16)(n >> 16), d);
+	ql = r << 16;
+	r = nolibgcc__divu16((r & 0xffff0000) | (nolibgcc_u16)n, d);
+	ql |= r & 0xffff;
+
+	if (rem)
+		*rem = r >> 16;
+
+	return (nolibgcc_u64)qh << 32 | ql;
+}
+
 /* Full 32 bit division, the divisor must not be 0 */
 NOLIBGCC_INLINE nolibgcc_u32 nolibgcc__udivmod32(nolibgcc_u32 n, nolibgcc_u32 d,
 						 nolibgcc_u32 *rem)
@@ -137,6 +162,45 @@ NOLIBGCC_INLINE nolibgcc_u32 nolibgcc__udivmod32(nolibgcc_u32 n, nolibgcc_u32 d,
 
 	if (rem)
 		*rem = r;
+
+	return q;
+}
+
+/* Full 64 bit division, the divisor must not be 0 */
+NOLIBGCC_INLINE nolibgcc_u64 nolibgcc__udivmod64(nolibgcc_u64 n, nolibgcc_u64 d,
+						 nolibgcc_u64 *rem)
+{
+	nolibgcc_u64 q = 0, bit = 1;
+
+	if (!(n >> 32) && !(d >> 32)) {
+		nolibgcc_u32 r32;
+
+		q = nolibgcc__udivmod32(n, d, &r32);
+		if (rem)
+			*rem = r32;
+		return q;
+	}
+
+	if (d <= 0xffff)
+		return nolibgcc__udivmod64_16(n, d, rem);
+
+	/* Restoring shift and subtract */
+	while (d < n && !(d >> 63)) {
+		d += d;
+		bit += bit;
+	}
+
+	while (bit) {
+		if (n >= d) {
+			n -= d;
+			q |= bit;
+		}
+		d >>= 1;
+		bit >>= 1;
+	}
+
+	if (rem)
+		*rem = n;
 
 	return q;
 }
