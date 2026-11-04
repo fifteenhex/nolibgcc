@@ -1,0 +1,5 @@
+*.o
+*.a
+tests/test.ref
+tests/*.elf
+tests/*.out
