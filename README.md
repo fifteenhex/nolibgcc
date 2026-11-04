@@ -69,9 +69,11 @@ isn't supported.
 
 `make test` builds `tests/test.c` for the host and, with
 [nolibc](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/include/nolibc),
-twice for the 68000, runs them in `qemu-m68k -cpu m68000`, where a 68020
-instruction traps, and diffs the output. It also checks that the library
-(at -Os and -O0) doesn't call anything.
+four ways for the 68000, runs them in `qemu-m68k -cpu m68000`, where a
+68020 instruction traps, and diffs the output. It also checks that the
+library (at -Os and -O0) and `tests/dispatch.c` (the cases the header must
+do inline) don't call anything, and that `tests/shiftadd.c` (multiplies
+left to the compiler) has no mulu.w.
 
     make CROSS_COMPILE=m68k-linux- NOLIBCDIR=path/to/nolibc test
 

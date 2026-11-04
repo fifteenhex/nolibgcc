@@ -65,18 +65,34 @@ $(O)tests/test.ref: $(D)tests/test.c $(NOLIBGCC_MAKEFILE)
 	@mkdir -p $(dir $@)
 	$(HOSTCC) -O2 -Wall -Wextra -DREF -o $@ $<
 
+# nolibc's _start does lea _start_c(%pc), a 16 bit displacement on 68000,
+# and the header test is big enough to put _start_c out of reach.
+# -fno-toplevel-reorder keeps them together.
 TEST_CFLAGS = $(NOLIBGCC_CPU) -Os -static -nostdlib -fno-builtin -std=gnu99 \
-	      -Wall -Wextra \
+	      -Wall -Wextra -fno-toplevel-reorder \
 	      -include $(NOLIBCDIR)/nolibc.h $(addprefix -I,$(UAPIDIR))
 
-# Target builds: library by name, operators
-TESTS = lib ops
+# Target builds: library by name, operators, header, header at -O0
+TESTS = lib ops hdr hdr0
 TEST_lib =
 TEST_ops = -DREF
+TEST_hdr = -DHDR
+TEST_hdr0 = -DHDR -O0
 
 $(O)tests/test-%.elf: $(D)tests/test.c $(D)nolibgcc.h $(NOLIBGCC_LIB) $(NOLIBGCC_MAKEFILE)
 	@mkdir -p $(dir $@)
 	$(CC) $(TEST_CFLAGS) $(TEST_$*) -o $@ $< $(NOLIBGCC_LIB)
+
+# The header's inline cases at each level the README promises
+$(O)tests/dispatch-%.o: $(D)tests/dispatch.c $(D)nolibgcc.h $(NOLIBGCC_MAKEFILE)
+	@mkdir -p $(dir $@)
+	$(CC) $(NOLIBGCC_CPU) -$* -ffreestanding -std=gnu99 -Wall -Wextra -c -o $@ $<
+
+$(O)tests/shiftadd-%.o: $(D)tests/shiftadd.c $(D)nolibgcc.h $(NOLIBGCC_MAKEFILE)
+	@mkdir -p $(dir $@)
+	$(CC) $(NOLIBGCC_CPU) -$* -ffreestanding -std=gnu99 -Wall -Wextra -c -o $@ $<
+
+SHIFTADD = $(addprefix $(O)tests/shiftadd-,O1.o O2.o Os.o)
 
 # The library at -O0, where the compiler is least helpful
 $(O)tests/O0-%.o: $(D)%.c $(D)nolibgcc.h $(NOLIBGCC_MAKEFILE)
@@ -86,13 +102,17 @@ $(O)tests/O0-%.o: $(D)%.c $(D)nolibgcc.h $(NOLIBGCC_MAKEFILE)
 # Nothing here may call out, or call a libgcc helper (a helper calling
 # itself). nm -u can't see the latter, the callee is in the same object,
 # hence the reloc grep.
-NOCALLS = $(NOLIBGCC_OBJS) $(addprefix $(O)tests/O0-,$(notdir $(NOLIBGCC_OBJS)))
+NOCALLS = $(NOLIBGCC_OBJS) $(addprefix $(O)tests/O0-,$(notdir $(NOLIBGCC_OBJS))) \
+	  $(addprefix $(O)tests/dispatch-,O1.o O2.o Os.o) $(SHIFTADD)
 
 .PHONY: test
 test: $(O)tests/test.ref $(foreach t,$(TESTS),$(O)tests/test-$(t).elf) $(NOCALLS)
 	@for o in $(NOCALLS); do \
 		c=`$(NM) -u $$o; $(OBJDUMP) -r $$o | grep -oE '__[a-z]+[sd]i3$$'`; \
 		test -z "$$c" || { echo "$$o calls:" $$c; exit 1; }; \
+	done
+	@for o in $(SHIFTADD); do \
+		! $(OBJDUMP) -d $$o | grep -q mulu || { echo "$$o uses mulu.w"; exit 1; }; \
 	done
 	$(O)tests/test.ref > $(O)tests/test.ref.out
 	$(foreach t,$(TESTS),$(QEMU) $(O)tests/test-$(t).elf > $(O)tests/test-$(t).out &&) true

@@ -2,13 +2,18 @@
 /*
  * Checks the helpers against the host doing the same operations natively.
  * Built with -DREF for the host, and for the target either calling the
- * library directly or with -DREF using the operators so the compiler calls
- * the library itself. The outputs must be identical. Pass -v to print every
- * result instead of a hash.
+ * library directly, with -DHDR using the header's functions, or with -DREF
+ * using the operators so the compiler calls the library itself. The outputs
+ * must be identical. Pass -v to print every result instead of a hash.
+ *
+ * The constant tests are there for the header: with a constant at the call
+ * site it takes different paths.
  */
 #if defined(REF) && !defined(NOLIBC)
 #include <stdio.h>
 #include <string.h>
+#elif defined(HDR)
+#include "../nolibgcc.h"
 #endif
 
 typedef int si;
@@ -30,6 +35,20 @@ typedef unsigned long long udi;
 #define SHL64(a, b)	((udi)(a) << (b))
 #define LSHR64(a, b)	((udi)(a) >> (b))
 #define ASHR64(a, b)	((di)(a) >> (b))
+#elif defined(HDR)
+#define MUL32(a, b)	nolibgcc_mul32(a, b)
+#define DIV32(a, b)	nolibgcc_div32(a, b)
+#define MOD32(a, b)	nolibgcc_mod32(a, b)
+#define UDIV32(a, b)	nolibgcc_udiv32(a, b)
+#define UMOD32(a, b)	nolibgcc_umod32(a, b)
+#define MUL64(a, b)	nolibgcc_mul64(a, b)
+#define DIV64(a, b)	nolibgcc_div64(a, b)
+#define MOD64(a, b)	nolibgcc_mod64(a, b)
+#define UDIV64(a, b)	nolibgcc_udiv64(a, b)
+#define UMOD64(a, b)	nolibgcc_umod64(a, b)
+#define SHL64(a, b)	nolibgcc_shl64(a, b)
+#define LSHR64(a, b)	nolibgcc_lshr64(a, b)
+#define ASHR64(a, b)	nolibgcc_ashr64(a, b)
 #else
 usi __mulsi3(usi a, usi b);
 si __divsi3(si a, si b);
@@ -117,6 +136,7 @@ static const udi edges[] = {
 
 #define NEDGES (sizeof(edges) / sizeof(edges[0]))
 #define NRANDOM 200000
+#define NRANDOM_CONST 2000
 
 /* Calls fn for each pair of edge values, their negatives, and random pairs */
 #define PAIRS(fn)							\
@@ -185,7 +205,9 @@ static void x_udivmod32(udi a64, udi b64)
 
 	if (!b)
 		return;
-#if defined(REF)
+#if defined(HDR)
+	q = nolibgcc_udivmod32(a, b, &r);
+#elif defined(REF)
 	q = a / b;
 	r = a % b;
 #else
@@ -201,7 +223,9 @@ static void x_udivmod64(udi a, udi b)
 
 	if (!b)
 		return;
-#if defined(REF)
+#if defined(HDR)
+	q = nolibgcc_udivmod64(a, b, &r);
+#elif defined(REF)
 	q = a / b;
 	r = a % b;
 #else
@@ -209,6 +233,30 @@ static void x_udivmod64(udi a, udi b)
 #endif
 	result("udivmod64", a, b, q);
 	result("udivmod64", a, b, r);
+}
+
+/*
+ * Operands that aren't constant but are known to be small, the header has
+ * paths for those too.
+ */
+static void x_narrow(udi a, udi b)
+{
+	unsigned short a16 = a, b16 = b;
+	usi a32 = a, b32 = b;
+
+	if (b16) {
+		result("n_udiv32", a16, b16, UDIV32(a16, b16));
+		result("n_umod32", a16, b16, UMOD32(a16, b16));
+		result("n_udiv32", a32, b16, UDIV32(a32, b16));
+		result("n_umod32", a32, b16, UMOD32(a32, b16));
+		result("n_udiv64", a, b16, UDIV64(a, b16));
+		result("n_umod64", a, b16, UMOD64(a, b16));
+	}
+	result("n_mul32", a32, b16, MUL32(a32, b16));
+	if (b32) {
+		result("n_udiv64", a32, b32, UDIV64(a32, b32));
+		result("n_umod64", a32, b32, UMOD64(a32, b32));
+	}
 }
 
 #define RUN(name) do { PAIRS(x_##name); report(#name); } while (0)
@@ -223,6 +271,7 @@ static void intmin(void)
 #if defined(REF) && !defined(NOLIBC)
 	printf("intmin ok\n");
 #else
+	/* volatile so the header can't see constants */
 	volatile si a32 = (si)0x80000000, b32 = -1;
 	volatile di a64 = (di)0x8000000000000000ULL, b64 = -1;
 	int ok = DIV32(a32, b32) == a32 && MOD32(a32, b32) == 0 &&
@@ -231,6 +280,85 @@ static void intmin(void)
 	printf("intmin %s\n", ok ? "ok" : "FAIL");
 #endif
 }
+
+/*
+ * Constant operands: the operation with a literal as one side, applied to
+ * the edge values and random values for the other side.
+ */
+#define CONST_VALUES(k)							\
+	for (unsigned i = 0; i < NEDGES * 2 + NRANDOM_CONST; i++) {	\
+		udi v = i < NEDGES * 2 ? edges[i / 2] : rnd();		\
+		if (i & 1)						\
+			v = -v;						\
+		k							\
+	}
+
+/* type, op, constant on the right, i.e. v op k */
+#define KR32(name, op, type, div, k)					\
+	CONST_VALUES(							\
+		type a = v;						\
+		if (!(div && BAD32(type, a, (type)(k))))		\
+			result(name, (usi)a, (usi)(type)(k), (usi)op(a, (type)(k)));)
+#define KL32(name, op, type, div, k)					\
+	CONST_VALUES(							\
+		type b = v;						\
+		if (!(div && BAD32(type, (type)(k), b)))		\
+			result(name, (usi)(type)(k), (usi)b, (usi)op((type)(k), b));)
+#define KR64(name, op, type, div, k)					\
+	CONST_VALUES(							\
+		type a = v;						\
+		if (!(div && BAD64(type, a, (type)(k))))		\
+			result(name, a, (type)(k), op(a, (type)(k)));)
+#define KL64(name, op, type, div, k)					\
+	CONST_VALUES(							\
+		type b = v;						\
+		if (!(div && BAD64(type, (type)(k), b)))		\
+			result(name, (type)(k), b, op((type)(k), b));)
+
+#define CONSTS32(X) X(1) X(2) X(3) X(7) X(10) X(16) X(100) X(1000) X(0x7fff) \
+	X(0x8000) X(0xffff) X(0x10000) X(0x10001) X(1000000) X(0x7fffffff) \
+	X(0x80000000) X(0xfffffffe) X(0xffffffff)
+#define CONSTS64(X) CONSTS32(X) X(0x100000000ULL) X(1000000000000ULL) \
+	X(0x7fffffffffffffffULL) X(0x8000000000000000ULL) X(0xffffffffffffffffULL)
+#define SHIFTS(X) X(0) X(1) X(7) X(15) X(16) X(31) X(32) X(33) X(48) X(63)
+
+#define K32(k)								\
+	KR32("k_mul32", MUL32, usi, 0, k)				\
+	KL32("k_mul32", MUL32, usi, 0, k)				\
+	KR32("k_udiv32", UDIV32, usi, 1, k)				\
+	KL32("k_udiv32", UDIV32, usi, 1, k)				\
+	KR32("k_umod32", UMOD32, usi, 1, k)				\
+	KL32("k_umod32", UMOD32, usi, 1, k)				\
+	KR32("k_div32", DIV32, si, 1, k)				\
+	KL32("k_div32", DIV32, si, 1, k)				\
+	KR32("k_div32", DIV32, si, 1, (si)-(usi)(k))				\
+	KL32("k_div32", DIV32, si, 1, (si)-(usi)(k))				\
+	KR32("k_mod32", MOD32, si, 1, k)				\
+	KL32("k_mod32", MOD32, si, 1, k)				\
+	KR32("k_mod32", MOD32, si, 1, (si)-(usi)(k))
+#define K64(k)								\
+	KR64("k_mul64", MUL64, udi, 0, k)				\
+	KL64("k_mul64", MUL64, udi, 0, k)				\
+	KR64("k_udiv64", UDIV64, udi, 1, k)				\
+	KL64("k_udiv64", UDIV64, udi, 1, k)				\
+	KR64("k_umod64", UMOD64, udi, 1, k)				\
+	KL64("k_umod64", UMOD64, udi, 1, k)				\
+	KR64("k_div64", DIV64, di, 1, k)				\
+	KL64("k_div64", DIV64, di, 1, k)				\
+	KR64("k_div64", DIV64, di, 1, (di)-(udi)(k))				\
+	KL64("k_div64", DIV64, di, 1, (di)-(udi)(k))				\
+	KR64("k_mod64", MOD64, di, 1, k)				\
+	KL64("k_mod64", MOD64, di, 1, k)				\
+	KR64("k_mod64", MOD64, di, 1, (di)-(udi)(k))
+#define KSHIFT(k)							\
+	CONST_VALUES(							\
+		result("k_shl64", v, k, SHL64(v, k));			\
+		result("k_lshr64", v, k, LSHR64(v, k));			\
+		result("k_ashr64", v, k, ASHR64(v, k));)
+
+static void consts32(void) { CONSTS32(K32) }
+static void consts64(void) { CONSTS64(K64) }
+static void shifts(void) { SHIFTS(KSHIFT) }
 
 int main(int argc, char **argv)
 {
@@ -252,7 +380,15 @@ int main(int argc, char **argv)
 	RUN(ashr64);
 	RUN(udivmod32);
 	RUN(udivmod64);
+	RUN(narrow);
 	intmin();
+
+	consts32();
+	report("const32");
+	consts64();
+	report("const64");
+	shifts();
+	report("constshift");
 
 	return 0;
 }
