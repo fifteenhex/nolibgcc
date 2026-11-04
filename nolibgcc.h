@@ -40,6 +40,9 @@ nolibgcc_u64 __udivdi3(nolibgcc_u64 a, nolibgcc_u64 b) NOLIBGCC_LIB;
 nolibgcc_u64 __umoddi3(nolibgcc_u64 a, nolibgcc_u64 b) NOLIBGCC_LIB;
 nolibgcc_u64 __nolibgcc_udivmoddi4(nolibgcc_u64 n, nolibgcc_u64 d,
 				   nolibgcc_u64 *rem) NOLIBGCC_LIB;
+nolibgcc_s64 __ashldi3(nolibgcc_s64 a, int b) NOLIBGCC_LIB;
+nolibgcc_s64 __ashrdi3(nolibgcc_s64 a, int b) NOLIBGCC_LIB;
+nolibgcc_s64 __lshrdi3(nolibgcc_s64 a, int b) NOLIBGCC_LIB;
 
 /*
  * The building blocks. Nothing here may use the operation it implements or
@@ -203,6 +206,45 @@ NOLIBGCC_INLINE nolibgcc_u64 nolibgcc__udivmod64(nolibgcc_u64 n, nolibgcc_u64 d,
 		*rem = n;
 
 	return q;
+}
+
+/* a << b for b from 0 to 63 */
+NOLIBGCC_INLINE nolibgcc_u64 nolibgcc__shl64(nolibgcc_u64 a, int b)
+{
+	nolibgcc_u32 lo = a, hi = a >> 32;
+
+	if (!b)
+		return a;
+
+	if (b >= 32) {
+		hi = lo << (b - 32);
+		lo = 0;
+	} else {
+		hi = (hi << b) | (lo >> (32 - b));
+		lo <<= b;
+	}
+
+	return (nolibgcc_u64)hi << 32 | lo;
+}
+
+/* a >> b for b from 0 to 63, arithmetic if arith is set */
+NOLIBGCC_INLINE nolibgcc_u64 nolibgcc__shr64(nolibgcc_u64 a, int b, int arith)
+{
+	nolibgcc_u32 lo = a, hi = a >> 32;
+	nolibgcc_u32 sign = arith && (nolibgcc_s32)hi < 0 ? 0xffffffff : 0;
+
+	if (!b)
+		return a;
+
+	if (b >= 32) {
+		lo = b == 32 ? hi : (hi >> (b - 32)) | (sign << (64 - b));
+		hi = sign;
+	} else {
+		lo = (lo >> b) | (hi << (32 - b));
+		hi = (hi >> b) | (sign << (32 - b));
+	}
+
+	return (nolibgcc_u64)hi << 32 | lo;
 }
 
 #endif

@@ -15,6 +15,9 @@ has the helpers that came up building
 | `__divsi3` `__modsi3` `__udivsi3` `__umodsi3` | divsi3.c  |
 | `__muldi3`                                    | muldi3.c  |
 | `__divdi3` `__moddi3` `__udivdi3` `__umoddi3` | divdi3.c  |
+| `__ashldi3`                                   | ashldi3.c |
+| `__lshrdi3`                                   | lshrdi3.c |
+| `__ashrdi3`                                   | ashrdi3.c |
 
 To find out what a program needs, link it without the library and look at
 what's undefined:
