@@ -36,3 +36,16 @@ somewhere else with `O=`:
 
 `NOLIBGCC_CPU` picks the CPU, `-m68000` by default, or `-m68010`. ColdFire
 isn't supported.
+
+## Testing
+
+`make test` builds `tests/test.c` for the host and, with
+[nolibc](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/include/nolibc),
+twice for the 68000, runs them in `qemu-m68k -cpu m68000`, where a 68020
+instruction traps, and diffs the output. It also checks that the library
+(at -Os and -O0) doesn't call anything.
+
+    make CROSS_COMPILE=m68k-linux- NOLIBCDIR=path/to/nolibc test
+
+`UAPIDIR` is where the Linux headers nolibc needs are,
+`/usr/m68k-linux-gnu/include` by default.
