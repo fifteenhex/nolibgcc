@@ -24,6 +24,34 @@ what's undefined:
 
     ... 2>&1 | grep -o "undefined reference to \`[^']*'" | sort -u
 
+## The header
+
+Because the compiler only calls the helpers once it has finished
+optimising, `x / 10` costs a full division even though the divisor is
+known. `nolibgcc.h` has the same operations as inline functions:
+
+    #include "nolibgcc.h"
+
+    q = nolibgcc_udiv32(x, 10);  /* instead of x / 10 */
+    r = nolibgcc_umod64(ns, 1000000000);
+
+| Function                                                   | Operator     |
+|------------------------------------------------------------|--------------|
+| `nolibgcc_mul32()` `nolibgcc_mul64()`                      | `*`          |
+| `nolibgcc_udiv32()` `nolibgcc_div32()` and 64 bit          | `/`          |
+| `nolibgcc_umod32()` `nolibgcc_mod32()` and 64 bit          | `%`          |
+| `nolibgcc_udivmod32()` `nolibgcc_udivmod64()`              | both at once |
+| `nolibgcc_shl64()` `nolibgcc_lshr64()` `nolibgcc_ashr64()` | `<<` `>>`    |
+
+After inlining they can see which operands are constant or known to be
+small (`__builtin_constant_p`, at -O1 and up). A divisor known to fit in
+16 bits is two divu.w, four for a 64 bit dividend; two 16 bit operands are
+one divu.w; a constant power of two is a shift. Anything else calls the
+library, except `nolibgcc_mul32()`, which is small enough to always
+inline; a constant the compiler can do in a few shifts and adds, and any
+constant shift count, are left to the compiler. `nolibgcc_mul64()` is just
+`*`.
+
 ## Building
 
     make CROSS_COMPILE=m68k-linux-

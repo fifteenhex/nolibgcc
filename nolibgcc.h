@@ -3,8 +3,12 @@
 #define NOLIBGCC_H
 
 /*
+ * Code can use the operators and link libnolibgcc.a, or call the
+ * nolibgcc_*() functions below, which are inlined and take a cheaper path
+ * when an operand is constant or known to be small.
+ *
  * The library is built from this header. The nolibgcc__*() functions are
- * its implementations.
+ * its implementations, not API.
  */
 
 #if !defined(__m68k__) || defined(__mcoldfire__)
@@ -25,7 +29,7 @@ typedef __UINT64_TYPE__ nolibgcc_u64;
 #define nolibgcc__abs32(x) ((x) < 0 ? -(nolibgcc_u32)(x) : (nolibgcc_u32)(x))
 #define nolibgcc__abs64(x) ((x) < 0 ? -(nolibgcc_u64)(x) : (nolibgcc_u64)(x))
 
-/* What's in the library */
+/* What's in the library, the libgcc names and the extras the header uses */
 nolibgcc_u32 __mulsi3(nolibgcc_u32 a, nolibgcc_u32 b) NOLIBGCC_LIB;
 nolibgcc_s32 __divsi3(nolibgcc_s32 a, nolibgcc_s32 b) NOLIBGCC_LIB;
 nolibgcc_s32 __modsi3(nolibgcc_s32 a, nolibgcc_s32 b) NOLIBGCC_LIB;
@@ -245,6 +249,167 @@ NOLIBGCC_INLINE nolibgcc_u64 nolibgcc__shr64(nolibgcc_u64 a, int b, int arith)
 	}
 
 	return (nolibgcc_u64)hi << 32 | lo;
+}
+
+/* The API */
+
+/* True if the compiler can prove x <= max */
+#define nolibgcc__known_le(x, max) (__builtin_constant_p((x) <= (max)) && (x) <= (max))
+/* True if x is a constant power of two */
+#define nolibgcc__const_pow2(x) (__builtin_constant_p(x) && (x) && !((x) & ((x) - 1)))
+
+/*
+ * Non-zero digits in the non-adjacent form of k: roughly the shifts and adds
+ * the compiler needs for * k. Up to 3 it never calls __mulsi3.
+ */
+NOLIBGCC_INLINE int nolibgcc__naf_weight(nolibgcc_u64 k)
+{
+	nolibgcc_u64 h = k >> 1;
+
+	return __builtin_popcountll(h ^ (k + h));
+}
+
+NOLIBGCC_INLINE nolibgcc_u32 nolibgcc_mul32(nolibgcc_u32 a, nolibgcc_u32 b)
+{
+	/* A constant the compiler can do in a few shifts and adds */
+	if ((__builtin_constant_p(a) && nolibgcc__naf_weight(a) <= 3) ||
+	    (__builtin_constant_p(b) && nolibgcc__naf_weight(b) <= 3))
+		return a * b;
+
+	/* Three mulu.w inline, ~30 bytes, twice the size of a call */
+	return nolibgcc__mul32(a, b);
+}
+
+NOLIBGCC_INLINE nolibgcc_u32 nolibgcc_udivmod32(nolibgcc_u32 n, nolibgcc_u32 d,
+						nolibgcc_u32 *rem)
+{
+	/* The compiler does these without a call */
+	if ((__builtin_constant_p(n) && __builtin_constant_p(d)) || nolibgcc__const_pow2(d)) {
+		if (rem)
+			*rem = n % d;
+		return n / d;
+	}
+
+	/* Both 16 bit, one divu.w gives both */
+	if (nolibgcc__known_le(n, 0xffff) && nolibgcc__known_le(d, 0xffff)) {
+		nolibgcc_u32 qr = nolibgcc__divu16(n, d);
+
+		if (rem)
+			*rem = qr >> 16;
+		return qr & 0xffff;
+	}
+
+	if (nolibgcc__known_le(d, 0xffff))
+		return nolibgcc__udivmod32_16(n, d, rem);
+
+	return __nolibgcc_udivmodsi4(n, d, rem);
+}
+
+NOLIBGCC_INLINE nolibgcc_u32 nolibgcc_udiv32(nolibgcc_u32 n, nolibgcc_u32 d)
+{
+	return nolibgcc_udivmod32(n, d, 0);
+}
+
+NOLIBGCC_INLINE nolibgcc_u32 nolibgcc_umod32(nolibgcc_u32 n, nolibgcc_u32 d)
+{
+	nolibgcc_u32 r;
+
+	nolibgcc_udivmod32(n, d, &r);
+	return r;
+}
+
+/* The quotient is negative if the signs differ */
+NOLIBGCC_INLINE nolibgcc_s32 nolibgcc_div32(nolibgcc_s32 n, nolibgcc_s32 d)
+{
+	nolibgcc_u32 q = nolibgcc_udiv32(nolibgcc__abs32(n), nolibgcc__abs32(d));
+
+	return (n ^ d) < 0 ? -q : q;
+}
+
+/* The remainder has the sign of the dividend */
+NOLIBGCC_INLINE nolibgcc_s32 nolibgcc_mod32(nolibgcc_s32 n, nolibgcc_s32 d)
+{
+	nolibgcc_u32 r = nolibgcc_umod32(nolibgcc__abs32(n), nolibgcc__abs32(d));
+
+	return n < 0 ? -r : r;
+}
+
+NOLIBGCC_INLINE nolibgcc_u64 nolibgcc_mul64(nolibgcc_u64 a, nolibgcc_u64 b)
+{
+	/* The same as *, too big to inline */
+	return a * b;
+}
+
+NOLIBGCC_INLINE nolibgcc_u64 nolibgcc_udivmod64(nolibgcc_u64 n, nolibgcc_u64 d,
+						nolibgcc_u64 *rem)
+{
+	if ((__builtin_constant_p(n) && __builtin_constant_p(d)) || nolibgcc__const_pow2(d)) {
+		if (rem)
+			*rem = n % d;
+		return n / d;
+	}
+
+	if (nolibgcc__known_le(n, 0xffffffff) && nolibgcc__known_le(d, 0xffffffff)) {
+		nolibgcc_u32 r32, q = nolibgcc_udivmod32(n, d, &r32);
+
+		if (rem)
+			*rem = r32;
+		return q;
+	}
+
+	if (nolibgcc__known_le(d, 0xffff))
+		return nolibgcc__udivmod64_16(n, d, rem);
+
+	return __nolibgcc_udivmoddi4(n, d, rem);
+}
+
+NOLIBGCC_INLINE nolibgcc_u64 nolibgcc_udiv64(nolibgcc_u64 n, nolibgcc_u64 d)
+{
+	return nolibgcc_udivmod64(n, d, 0);
+}
+
+NOLIBGCC_INLINE nolibgcc_u64 nolibgcc_umod64(nolibgcc_u64 n, nolibgcc_u64 d)
+{
+	nolibgcc_u64 r;
+
+	nolibgcc_udivmod64(n, d, &r);
+	return r;
+}
+
+NOLIBGCC_INLINE nolibgcc_s64 nolibgcc_div64(nolibgcc_s64 n, nolibgcc_s64 d)
+{
+	nolibgcc_u64 q = nolibgcc_udiv64(nolibgcc__abs64(n), nolibgcc__abs64(d));
+
+	return (n ^ d) < 0 ? -q : q;
+}
+
+NOLIBGCC_INLINE nolibgcc_s64 nolibgcc_mod64(nolibgcc_s64 n, nolibgcc_s64 d)
+{
+	nolibgcc_u64 r = nolibgcc_umod64(nolibgcc__abs64(n), nolibgcc__abs64(d));
+
+	return n < 0 ? -r : r;
+}
+
+/* Shifts by a constant are inlined by the compiler already */
+NOLIBGCC_INLINE nolibgcc_u64 nolibgcc_shl64(nolibgcc_u64 a, int b)
+{
+	if (__builtin_constant_p(b))
+		return a << b;
+	return __ashldi3(a, b);
+}
+
+NOLIBGCC_INLINE nolibgcc_u64 nolibgcc_lshr64(nolibgcc_u64 a, int b)
+{
+	if (__builtin_constant_p(b))
+		return a >> b;
+	return __lshrdi3(a, b);
+}
+
+NOLIBGCC_INLINE nolibgcc_s64 nolibgcc_ashr64(nolibgcc_s64 a, int b)
+{
+	if (__builtin_constant_p(b))
+		return a >> b;
+	return __ashrdi3(a, b);
 }
 
 #endif
