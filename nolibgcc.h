@@ -173,11 +173,41 @@ NOLIBGCC_INLINE nolibgcc_u32 nolibgcc__udivmod32(nolibgcc_u32 n, nolibgcc_u32 d,
 	return q;
 }
 
+/*
+ * One 16 bit digit of a long division by a d that doesn't fit in 16 bits:
+ * n / d for n < d << 16, so the quotient fits in 16 bits. Same estimate
+ * and fix up as nolibgcc__udivmod32(), with the subtraction in 64 bits.
+ * Shifting n down with d keeps it below (ds + 1) << 16, so it fits in 32
+ * bits and the divu.w can't overflow.
+ */
+NOLIBGCC_INLINE nolibgcc_u16 nolibgcc__udivmod48_32(nolibgcc_u64 n, nolibgcc_u32 d,
+						    nolibgcc_u32 *rem)
+{
+	nolibgcc_u64 ns = n, r;
+	nolibgcc_u32 ds = d;
+	nolibgcc_u16 q;
+
+	do {
+		ds >>= 1;
+		ns >>= 1;
+	} while (ds >= 0xffff);
+
+	q = nolibgcc__divu16(ns, ds + 1);
+	r = n - (nolibgcc__mulu16(q, d) + ((nolibgcc_u64)nolibgcc__mulu16(q, d >> 16) << 16));
+	while (r >= d) {
+		r -= d;
+		q++;
+	}
+
+	*rem = r;
+	return q;
+}
+
 /* Full 64 bit division, the divisor must not be 0 */
 NOLIBGCC_INLINE nolibgcc_u64 nolibgcc__udivmod64(nolibgcc_u64 n, nolibgcc_u64 d,
 						 nolibgcc_u64 *rem)
 {
-	nolibgcc_u64 q = 0, bit = 1;
+	nolibgcc_u32 q, bit;
 
 	if (!(n >> 32) && !(d >> 32)) {
 		nolibgcc_u32 r32;
@@ -191,7 +221,27 @@ NOLIBGCC_INLINE nolibgcc_u64 nolibgcc__udivmod64(nolibgcc_u64 n, nolibgcc_u64 d,
 	if (d <= 0xffff)
 		return nolibgcc__udivmod64_16(n, d, rem);
 
-	/* Restoring shift and subtract */
+	/* A 32 bit divisor, long division a 16 bit digit at a time after the top word */
+	if (!(d >> 32)) {
+		nolibgcc_u32 r32, ql = 0, nl = n;
+		int i;
+
+		q = nolibgcc__udivmod32(n >> 32, d, &r32);
+		/* A loop so there's only one copy of the digit code */
+		for (i = 0; i < 2; i++) {
+			ql = ql << 16 | nolibgcc__udivmod48_32((nolibgcc_u64)r32 << 16 | nl >> 16,
+							       d, &r32);
+			nl <<= 16;
+		}
+
+		if (rem)
+			*rem = r32;
+		return (nolibgcc_u64)q << 32 | ql;
+	}
+
+	/* Restoring shift and subtract, d is over 32 bits so q fits in 32 */
+	q = 0;
+	bit = 1;
 	while (d < n && !(d >> 63)) {
 		d += d;
 		bit += bit;

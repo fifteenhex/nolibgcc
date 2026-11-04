@@ -60,8 +60,8 @@ divides, which are the slow ones on the 68000:
          |        operators         |          header
 workload |   insns   mul   div bytes |   insns   mul   div bytes
 dec32    |     801   0.0  39.2    78 |     205   0.0  19.6    72
-dec64    |    2684   0.0 116.3   100 |     707   0.0  77.5   116
-ns       |    2312   2.0   1.0    84 |    2286   2.0   1.0    98
+dec64    |    2723   0.0 116.3   100 |     707   0.0  77.5   116
+ns       |     881  14.0   7.0    84 |     855  14.0   7.0    98
 ms       |      79   0.0   4.0    50 |      17   0.0   2.0    44
 percent  |      90   2.0   1.0    40 |      84   2.0   1.0    44
 kib      |      49   0.0   0.0    76 |      49   0.0   0.0    76
