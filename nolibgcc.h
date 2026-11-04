@@ -32,6 +32,7 @@ nolibgcc_u32 __udivsi3(nolibgcc_u32 a, nolibgcc_u32 b) NOLIBGCC_LIB;
 nolibgcc_u32 __umodsi3(nolibgcc_u32 a, nolibgcc_u32 b) NOLIBGCC_LIB;
 nolibgcc_u32 __nolibgcc_udivmodsi4(nolibgcc_u32 n, nolibgcc_u32 d,
 				   nolibgcc_u32 *rem) NOLIBGCC_LIB;
+nolibgcc_s64 __muldi3(nolibgcc_s64 a, nolibgcc_s64 b) NOLIBGCC_LIB;
 
 /*
  * The building blocks. Nothing here may use the operation it implements or
@@ -63,6 +64,34 @@ NOLIBGCC_INLINE nolibgcc_u32 nolibgcc__mul32(nolibgcc_u32 a, nolibgcc_u32 b)
 	nolibgcc_u16 mid = nolibgcc__mulu16(a >> 16, b) + nolibgcc__mulu16(a, b >> 16);
 
 	return nolibgcc__mulu16(a, b) + ((nolibgcc_u32)mid << 16);
+}
+
+/* Full 64 bit product of two 32 bit values */
+NOLIBGCC_INLINE nolibgcc_u64 nolibgcc__mul32x32(nolibgcc_u32 a, nolibgcc_u32 b)
+{
+	nolibgcc_u32 ll = nolibgcc__mulu16(a, b);
+	nolibgcc_u32 lh = nolibgcc__mulu16(a, b >> 16);
+	nolibgcc_u32 hl = nolibgcc__mulu16(a >> 16, b);
+	nolibgcc_u32 hh = nolibgcc__mulu16(a >> 16, b >> 16);
+	nolibgcc_u32 mid = lh + hl, lo, hi;
+
+	/* mid carried out, that's worth 1 << 48 */
+	if (mid < lh)
+		hh += 0x10000;
+
+	lo = ll + (mid << 16);
+	hi = hh + (mid >> 16) + (lo < ll);
+
+	return (nolibgcc_u64)hi << 32 | lo;
+}
+
+/* Low 64 bits of a * b, the high words multiplied only affect bits 64 and up */
+NOLIBGCC_INLINE nolibgcc_u64 nolibgcc__mul64(nolibgcc_u64 a, nolibgcc_u64 b)
+{
+	nolibgcc_u32 al = a, ah = a >> 32, bl = b, bh = b >> 32;
+	nolibgcc_u32 cross = nolibgcc__mul32(ah, bl) + nolibgcc__mul32(al, bh);
+
+	return nolibgcc__mul32x32(al, bl) + ((nolibgcc_u64)cross << 32);
 }
 
 /* n / d for a 16 bit d, any n, a divu.w for each 16 bits of n */
