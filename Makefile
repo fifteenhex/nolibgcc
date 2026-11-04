@@ -14,7 +14,7 @@ $(error CROSS_COMPILE not set)
 endif
 
 ifeq ($(NOLIBCDIR),)
-ifneq ($(filter test %.elf,$(MAKECMDGOALS)),)
+ifneq ($(filter test bench %.elf,$(MAKECMDGOALS)),)
 $(error NOLIBCDIR not set, needed for the tests)
 endif
 endif
@@ -118,6 +118,22 @@ test: $(O)tests/test.ref $(foreach t,$(TESTS),$(O)tests/test-$(t).elf) $(NOCALLS
 	$(foreach t,$(TESTS),$(QEMU) $(O)tests/test-$(t).elf > $(O)tests/test-$(t).out &&) true
 	$(foreach t,$(TESTS),diff -u $(O)tests/test.ref.out $(O)tests/test-$(t).out &&) true
 	@echo PASS
+
+BENCH_N = 200
+BENCH_CFLAGS = $(TEST_CFLAGS) -flto -DN=$(BENCH_N)
+
+$(O)tests/bench-ops.elf: $(D)tests/bench.c $(NOLIBGCC_LIB) $(NOLIBGCC_MAKEFILE)
+	@mkdir -p $(dir $@)
+	$(CC) $(BENCH_CFLAGS) -o $@ $< $(NOLIBGCC_LIB)
+
+$(O)tests/bench-hdr.elf: $(D)tests/bench.c $(D)nolibgcc.h $(NOLIBGCC_LIB) \
+		       $(NOLIBGCC_MAKEFILE)
+	@mkdir -p $(dir $@)
+	$(CC) $(BENCH_CFLAGS) -DHDR -o $@ $< $(NOLIBGCC_LIB)
+
+.PHONY: bench
+bench: $(O)tests/bench-ops.elf $(O)tests/bench-hdr.elf
+	$(D)tests/bench.py $(CROSS_COMPILE) "$(QEMU)" $(BENCH_N) $^
 
 .PHONY: clean
 clean:

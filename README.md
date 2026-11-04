@@ -52,6 +52,25 @@ inline; a constant the compiler can do in a few shifts and adds, and any
 constant shift count, are left to the compiler. `nolibgcc_mul64()` is just
 `*`.
 
+`make bench` runs some typical uses written both ways in qemu and counts
+the instructions per call (insns), and how many of them are multiplies and
+divides, which are the slow ones on the 68000:
+
+```
+         |        operators         |          header
+workload |   insns   mul   div bytes |   insns   mul   div bytes
+dec32    |     801   0.0  39.2    78 |     205   0.0  19.6    72
+dec64    |    2684   0.0 116.3   100 |     707   0.0  77.5   116
+ns       |    2312   2.0   1.0    84 |    2286   2.0   1.0    98
+ms       |      79   0.0   4.0    50 |      17   0.0   2.0    44
+percent  |      90   2.0   1.0    40 |      84   2.0   1.0    44
+kib      |      49   0.0   0.0    76 |      49   0.0   0.0    76
+```
+
+dec32 and dec64 print numbers (`/ 10` and `% 10`), ns and ms convert
+times (`/` and `% 1000000000` on 64 bits, `/ 1000` on 32 bits), percent
+divides by a variable and kib multiplies by a constant.
+
 ## Building
 
     make CROSS_COMPILE=m68k-linux-
@@ -76,6 +95,7 @@ do inline) don't call anything, and that `tests/shiftadd.c` (multiplies
 left to the compiler) has no mulu.w.
 
     make CROSS_COMPILE=m68k-linux- NOLIBCDIR=path/to/nolibc test
+    make CROSS_COMPILE=m68k-linux- NOLIBCDIR=path/to/nolibc bench
 
 `UAPIDIR` is where the Linux headers nolibc needs are,
 `/usr/m68k-linux-gnu/include` by default.
