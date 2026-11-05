@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 /*
- * Multiplies by a constant the header should leave to the compiler's shifts
- * and adds. Only compiled, never linked: no mulu.w and no calls.
+ * 68000 multiplies by a constant the header should leave to the compiler's
+ * shifts and adds. Only compiled, never linked: no mulu.w and no calls.
  */
 #include "../nolibgcc.h"
 

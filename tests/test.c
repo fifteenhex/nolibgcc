@@ -2,9 +2,10 @@
 /*
  * Checks the helpers against the host doing the same operations natively.
  * Built with -DREF for the host, and for the target either calling the
- * library directly, with -DHDR using the header's functions, or with -DREF
- * using the operators so the compiler calls the library itself. The outputs
- * must be identical. Pass -v to print every result instead of a hash.
+ * library directly (68000 only), with -DHDR using the header's functions,
+ * or with -DREF using the operators so the compiler calls the library
+ * itself. The outputs must be identical. Pass -v to print every result
+ * instead of a hash.
  *
  * The constant tests are there for the header: with a constant at the call
  * site it takes different paths.
@@ -91,7 +92,7 @@ static void result(const char *name, udi a, udi b, udi r)
 		       (usi)(r >> 32), (usi)r);
 	/*
 	 * FNV-1a. The multiply here and the shift in rnd() are __muldi3 and
-	 * __lshrdi3 calls on the target, a broken one shows up as every line
+	 * __lshrdi3 calls on the 68000, a broken one shows up as every line
 	 * failing.
 	 */
 	for (int i = 0; i < 8; i++) {

@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT
+#
+# 32 bit ARM without a divide instruction
+
+# -mfpu: a hard float toolchain won't build without one, nothing here uses it
+NOLIBGCC_CPU ?= -march=armv7-a -mfpu=vfpv3-d16
+NOLIBGCC_SRCS = idiv.c ldiv.c
+NOLIBGCC_HELPERS = __aeabi_[a-z]+
+
+QEMU ?= qemu-arm -cpu cortex-a9
+UAPIDIR ?= /usr/arm-linux-gnueabihf/include
+
+# -fno-pie: Debian's arm-linux-gnueabihf-gcc defaults to PIE, and nolibc
+# built PIE wants R_ARM_RELATIVE, which the UAPI elf.h doesn't define. The
+# tests are plain -static anyway.
+TEST_ARCH_CFLAGS = -fno-pie
+
+# The udf division by zero is SIGILL
+DIVZERO_SIG = 4
+
+# No lib test, __aeabi_uldivmod isn't callable from C; opsarm is ARM state
+TESTS = ops opsarm hdr hdr0
+TEST_opsarm = -DREF -marm

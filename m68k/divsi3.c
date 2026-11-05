@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-#include "nolibgcc.h"
+#include "../nolibgcc.h"
 
 nolibgcc_u32 __nolibgcc_udivmodsi4(nolibgcc_u32 n, nolibgcc_u32 d, nolibgcc_u32 *rem)
 {

@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: MIT
 #
 # make CROSS_COMPILE=m68k-linux-
-# make -f nolibgcc/Makefile CROSS_COMPILE=m68k-linux- O=build/nolibgcc
+# make -f nolibgcc/Makefile CROSS_COMPILE=arm-linux-gnueabihf- O=build/nolibgcc
 # make CROSS_COMPILE=m68k-linux- NOLIBCDIR=... test
 
 NOLIBGCC_MAKEFILE := $(lastword $(MAKEFILE_LIST))
+# Makefile.<arch> is included before all: and has rules of its own
+.DEFAULT_GOAL := all
 D := $(patsubst ./%,%,$(dir $(NOLIBGCC_MAKEFILE)))
 O ?= $(D)
 override O := $(patsubst %//,%/,$(if $(O),$(O)/,))
@@ -25,23 +27,32 @@ NM = $(CROSS_COMPILE)nm
 OBJDUMP = $(CROSS_COMPILE)objdump
 SIZE = $(CROSS_COMPILE)size
 
-NOLIBGCC_CPU ?= -m68000
+# m68k-linux-gnu -> m68k, arm-linux-gnueabihf and armeb-... -> arm
+ifneq ($(CROSS_COMPILE),)
+NOLIBGCC_ARCH := $(patsubst arm%,arm,$(firstword $(subst -, ,$(shell $(CC) -dumpmachine))))
+ifeq ($(wildcard $(D)Makefile.$(NOLIBGCC_ARCH)),)
+$(error nolibgcc doesn't support '$(NOLIBGCC_ARCH)' (from $(CC) -dumpmachine))
+endif
+# Makefile.<arch> uses these in prerequisites, which make expands as it reads them
+NOLIBGCC_MAKEFILES = $(NOLIBGCC_MAKEFILE) $(D)Makefile.$(NOLIBGCC_ARCH)
+NOLIBGCC_HEADERS = $(D)nolibgcc.h $(D)$(NOLIBGCC_ARCH)/arch.h
+NOLIBGCC_LIB = $(O)libnolibgcc.a
+include $(D)Makefile.$(NOLIBGCC_ARCH)
+endif
+
 # No LTO: calls to these only appear after LTO has run, too late to inline
 # them or to pull in an LTO'd archive member.
-# -mpcrel: position independent, usable from PIE programs, without the GOT
-# -fpie would use.
-NOLIBGCC_CFLAGS = $(NOLIBGCC_CPU) -mpcrel -Os -ffreestanding -std=gnu99 \
-		  -Wall -Wextra -ggdb
+# No stack protector: the helpers take the address of a local, which
+# -fstack-protector-strong guards with __stack_chk_guard and __stack_chk_fail.
+NOLIBGCC_CFLAGS = $(NOLIBGCC_CPU) $(NOLIBGCC_ARCH_CFLAGS) -Os -ffreestanding \
+		  -fno-stack-protector -std=gnu99 -Wall -Wextra -ggdb
 
-NOLIBGCC_LIB = $(O)libnolibgcc.a
-
-NOLIBGCC_OBJS = $(addprefix $(O),mulsi3.o divsi3.o muldi3.o divdi3.o \
-		ashldi3.o lshrdi3.o ashrdi3.o)
+NOLIBGCC_OBJS = $(addprefix $(O)$(NOLIBGCC_ARCH)/,$(NOLIBGCC_SRCS:.c=.o))
 
 .PHONY: all
 all: $(NOLIBGCC_LIB)
 
-$(O)%.o: $(D)%.c $(D)nolibgcc.h $(NOLIBGCC_MAKEFILE)
+$(O)%.o: $(D)%.c $(NOLIBGCC_HEADERS) $(NOLIBGCC_MAKEFILES)
 	@mkdir -p $(dir $@)
 	$(CC) $(NOLIBGCC_CFLAGS) -c -o $@ $<
 
@@ -58,85 +69,70 @@ size: $(NOLIBGCC_OBJS)
 	$(SIZE) $^
 
 HOSTCC ?= gcc
-QEMU ?= qemu-m68k -cpu m68000
-UAPIDIR ?= /usr/m68k-linux-gnu/include
 
 $(O)tests/test.ref: $(D)tests/test.c $(NOLIBGCC_MAKEFILE)
 	@mkdir -p $(dir $@)
 	$(HOSTCC) -O2 -Wall -Wextra -DREF -o $@ $<
 
-# nolibc's _start does lea _start_c(%pc), a 16 bit displacement on 68000,
-# and the header test is big enough to put _start_c out of reach.
-# -fno-toplevel-reorder keeps them together.
 TEST_CFLAGS = $(NOLIBGCC_CPU) -Os -static -nostdlib -fno-builtin -std=gnu99 \
-	      -Wall -Wextra -fno-toplevel-reorder \
+	      -Wall -Wextra $(TEST_ARCH_CFLAGS) \
 	      -include $(NOLIBCDIR)/nolibc.h $(addprefix -I,$(UAPIDIR))
 
-# Target builds: library by name, operators, header, header at -O0
-TESTS = lib ops hdr hdr0
-TEST_lib =
+# Target builds of tests/test.c, the ones in TESTS are run
 TEST_ops = -DREF
 TEST_hdr = -DHDR
 TEST_hdr0 = -DHDR -O0
 
-$(O)tests/test-%.elf: $(D)tests/test.c $(D)nolibgcc.h $(NOLIBGCC_LIB) $(NOLIBGCC_MAKEFILE)
+$(O)tests/test-%.elf: $(D)tests/test.c $(NOLIBGCC_HEADERS) $(NOLIBGCC_LIB) $(NOLIBGCC_MAKEFILES)
 	@mkdir -p $(dir $@)
 	$(CC) $(TEST_CFLAGS) $(TEST_$*) -o $@ $< $(NOLIBGCC_LIB)
 
-# The header's inline cases at each level the README promises
-$(O)tests/dispatch-%.o: $(D)tests/dispatch.c $(D)nolibgcc.h $(NOLIBGCC_MAKEFILE)
+$(O)tests/divzero.elf: $(D)tests/divzero.c $(NOLIBGCC_LIB) $(NOLIBGCC_MAKEFILES)
 	@mkdir -p $(dir $@)
-	$(CC) $(NOLIBGCC_CPU) -$* -ffreestanding -std=gnu99 -Wall -Wextra -c -o $@ $<
-
-$(O)tests/shiftadd-%.o: $(D)tests/shiftadd.c $(D)nolibgcc.h $(NOLIBGCC_MAKEFILE)
-	@mkdir -p $(dir $@)
-	$(CC) $(NOLIBGCC_CPU) -$* -ffreestanding -std=gnu99 -Wall -Wextra -c -o $@ $<
-
-SHIFTADD = $(addprefix $(O)tests/shiftadd-,O1.o O2.o Os.o)
+	$(CC) $(TEST_CFLAGS) -o $@ $< $(NOLIBGCC_LIB)
 
 # The library at -O0, where the compiler is least helpful
-$(O)tests/O0-%.o: $(D)%.c $(D)nolibgcc.h $(NOLIBGCC_MAKEFILE)
+O0_OBJS = $(addprefix $(O)tests/O0-,$(notdir $(NOLIBGCC_OBJS)))
+
+$(O)tests/O0-%.o: $(D)$(NOLIBGCC_ARCH)/%.c $(NOLIBGCC_HEADERS) $(NOLIBGCC_MAKEFILES)
 	@mkdir -p $(dir $@)
 	$(CC) $(NOLIBGCC_CFLAGS) -O0 -c -o $@ $<
 
-# Nothing here may call out, or call a libgcc helper (a helper calling
-# itself). nm -u can't see the latter, the callee is in the same object,
-# hence the reloc grep.
-NOCALLS = $(NOLIBGCC_OBJS) $(addprefix $(O)tests/O0-,$(notdir $(NOLIBGCC_OBJS))) \
-	  $(addprefix $(O)tests/dispatch-,O1.o O2.o Os.o) $(SHIFTADD)
+# And the -O0 library run by the opsO0 test
+$(O)tests/libO0.a: $(O0_OBJS)
+	rm -f $@
+	$(AR) rcs $@ $^
+
+$(O)tests/test-opsO0.elf: $(D)tests/test.c $(O)tests/libO0.a $(NOLIBGCC_MAKEFILES)
+	@mkdir -p $(dir $@)
+	$(CC) $(TEST_CFLAGS) -DREF -o $@ $< $(O)tests/libO0.a
+
+TESTS += opsO0
+
+# Nothing here may call out, or call a helper (a helper calling itself).
+# nm -u can't see the latter, the callee is in the same object, hence the
+# reloc grep.
+NOCALLS = $(NOLIBGCC_OBJS) $(O0_OBJS) $(NOCALLS_ARCH)
 
 .PHONY: test
-test: $(O)tests/test.ref $(foreach t,$(TESTS),$(O)tests/test-$(t).elf) $(NOCALLS)
+test: $(O)tests/test.ref $(foreach t,$(TESTS),$(O)tests/test-$(t).elf) $(NOCALLS) \
+      $(O)tests/divzero.elf
 	@for o in $(NOCALLS); do \
-		c=`$(NM) -u $$o; $(OBJDUMP) -r $$o | grep -oE '__[a-z]+[sd]i3$$'`; \
+		c=`$(NM) -u $$o; $(OBJDUMP) -r $$o | grep -oE '$(NOLIBGCC_HELPERS)$$'`; \
 		test -z "$$c" || { echo "$$o calls:" $$c; exit 1; }; \
 	done
-	@for o in $(SHIFTADD); do \
-		! $(OBJDUMP) -d $$o | grep -q mulu || { echo "$$o uses mulu.w"; exit 1; }; \
+	$(TEST_ARCH_CHECK)
+	@ulimit -c 0; for c in `sed -n "s/.*case '\(.\)'.*/\1/p" $(D)tests/divzero.c`; do \
+		$(QEMU) $(O)tests/divzero.elf $$c >/dev/null 2>&1; \
+		test $$? -eq $$((128 + $(DIVZERO_SIG))) || { echo "divzero $$c didn't trap"; exit 1; }; \
 	done
 	$(O)tests/test.ref > $(O)tests/test.ref.out
 	$(foreach t,$(TESTS),$(QEMU) $(O)tests/test-$(t).elf > $(O)tests/test-$(t).out &&) true
 	$(foreach t,$(TESTS),diff -u $(O)tests/test.ref.out $(O)tests/test-$(t).out &&) true
 	@echo PASS
 
-BENCH_N = 200
-BENCH_CFLAGS = $(TEST_CFLAGS) -flto -DN=$(BENCH_N)
-
-$(O)tests/bench-ops.elf: $(D)tests/bench.c $(NOLIBGCC_LIB) $(NOLIBGCC_MAKEFILE)
-	@mkdir -p $(dir $@)
-	$(CC) $(BENCH_CFLAGS) -o $@ $< $(NOLIBGCC_LIB)
-
-$(O)tests/bench-hdr.elf: $(D)tests/bench.c $(D)nolibgcc.h $(NOLIBGCC_LIB) \
-		       $(NOLIBGCC_MAKEFILE)
-	@mkdir -p $(dir $@)
-	$(CC) $(BENCH_CFLAGS) -DHDR -o $@ $< $(NOLIBGCC_LIB)
-
-.PHONY: bench
-bench: $(O)tests/bench-ops.elf $(O)tests/bench-hdr.elf
-	$(D)tests/bench.py $(CROSS_COMPILE) "$(QEMU)" $(BENCH_N) $^
-
 .PHONY: clean
 clean:
-	rm -f $(O)*.o $(O)*.a $(O)tests/*.o $(O)tests/test.ref $(O)tests/*.elf \
+	rm -f $(O)*.a $(O)*/*.o $(O)tests/*.a $(O)tests/test.ref $(O)tests/*.elf \
 		$(O)tests/*.out
-	$(if $(filter-out $(D),$(O)),rmdir $(O)tests $(O) 2>/dev/null || true)
+	$(if $(filter-out $(D),$(O)),rmdir $(O)*/ $(O) 2>/dev/null || true)

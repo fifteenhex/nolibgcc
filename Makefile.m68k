@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MIT
+#
+# The 68000 and 68010. From the 68020 up there's a 32 bit multiply and
+# divide and no need for this.
+
+NOLIBGCC_CPU ?= -m68000
+# -mpcrel: position independent, usable from PIE programs, without the GOT
+# -fpie would use.
+NOLIBGCC_ARCH_CFLAGS = -mpcrel
+NOLIBGCC_SRCS = mulsi3.c divsi3.c muldi3.c divdi3.c ashldi3.c lshrdi3.c ashrdi3.c
+NOLIBGCC_HELPERS = __[a-z]+[sd]i3
+
+QEMU ?= qemu-m68k -cpu m68000
+UAPIDIR ?= /usr/m68k-linux-gnu/include
+
+# nolibc's _start does lea _start_c(%pc), a 16 bit displacement on 68000,
+# and the header test is big enough to put _start_c out of reach.
+# -fno-toplevel-reorder keeps them together.
+TEST_ARCH_CFLAGS = -fno-toplevel-reorder
+
+# divu.w by zero is SIGFPE
+DIVZERO_SIG = 8
+
+# Library by name, operators, header, header at -O0
+TESTS = lib ops hdr hdr0
+TEST_lib =
+
+# The header's inline cases at each level the README promises
+$(O)tests/dispatch-%.o: $(D)tests/dispatch.c $(NOLIBGCC_HEADERS) $(NOLIBGCC_MAKEFILES)
+	@mkdir -p $(dir $@)
+	$(CC) $(NOLIBGCC_CPU) -$* -ffreestanding -std=gnu99 -Wall -Wextra -c -o $@ $<
+
+$(O)tests/shiftadd-%.o: $(D)tests/shiftadd.c $(NOLIBGCC_HEADERS) $(NOLIBGCC_MAKEFILES)
+	@mkdir -p $(dir $@)
+	$(CC) $(NOLIBGCC_CPU) -$* -ffreestanding -std=gnu99 -Wall -Wextra -c -o $@ $<
+
+SHIFTADD = $(addprefix $(O)tests/shiftadd-,O1.o O2.o Os.o)
+NOCALLS_ARCH = $(addprefix $(O)tests/dispatch-,O1.o O2.o Os.o) $(SHIFTADD)
+TEST_ARCH_CHECK = @for o in $(SHIFTADD); do \
+	! $(OBJDUMP) -d $$o | grep -q mulu || { echo "$$o uses mulu.w"; exit 1; }; \
+	done
+
+BENCH_N = 200
+BENCH_CFLAGS = $(TEST_CFLAGS) -flto -DN=$(BENCH_N)
+
+$(O)tests/bench-ops.elf: $(D)tests/bench.c $(NOLIBGCC_LIB) $(NOLIBGCC_MAKEFILES)
+	@mkdir -p $(dir $@)
+	$(CC) $(BENCH_CFLAGS) -o $@ $< $(NOLIBGCC_LIB)
+
+$(O)tests/bench-hdr.elf: $(D)tests/bench.c $(NOLIBGCC_HEADERS) $(NOLIBGCC_LIB) \
+		       $(NOLIBGCC_MAKEFILES)
+	@mkdir -p $(dir $@)
+	$(CC) $(BENCH_CFLAGS) -DHDR -o $@ $< $(NOLIBGCC_LIB)
+
+.PHONY: bench
+bench: $(O)tests/bench-ops.elf $(O)tests/bench-hdr.elf
+	$(D)tests/bench.py $(CROSS_COMPILE) "$(QEMU)" $(BENCH_N) $^
