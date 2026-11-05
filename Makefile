@@ -98,6 +98,17 @@ $(O)tests/O0-%.o: $(D)$(NOLIBGCC_ARCH)/%.c $(NOLIBGCC_HEADERS) $(NOLIBGCC_MAKEFI
 	@mkdir -p $(dir $@)
 	$(CC) $(NOLIBGCC_CFLAGS) -O0 -c -o $@ $<
 
+# And the -O0 library run by the opsO0 test
+$(O)tests/libO0.a: $(O0_OBJS)
+	rm -f $@
+	$(AR) rcs $@ $^
+
+$(O)tests/test-opsO0.elf: $(D)tests/test.c $(O)tests/libO0.a $(NOLIBGCC_MAKEFILES)
+	@mkdir -p $(dir $@)
+	$(CC) $(TEST_CFLAGS) -DREF -o $@ $< $(O)tests/libO0.a
+
+TESTS += opsO0
+
 # Nothing here may call out, or call a helper (a helper calling itself).
 # nm -u can't see the latter, the callee is in the same object, hence the
 # reloc grep.
@@ -122,5 +133,6 @@ test: $(O)tests/test.ref $(foreach t,$(TESTS),$(O)tests/test-$(t).elf) $(NOCALLS
 
 .PHONY: clean
 clean:
-	rm -f $(O)*.a $(O)*/*.o $(O)tests/test.ref $(O)tests/*.elf $(O)tests/*.out
+	rm -f $(O)*.a $(O)*/*.o $(O)tests/*.a $(O)tests/test.ref $(O)tests/*.elf \
+		$(O)tests/*.out
 	$(if $(filter-out $(D),$(O)),rmdir $(O)*/ $(O) 2>/dev/null || true)
