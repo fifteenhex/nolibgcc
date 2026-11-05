@@ -112,8 +112,8 @@ architecture comes from the compiler, what's specific to one is in
 [nolibc](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/include/nolibc),
 for the target: the operators, the header at -Os and at -O0, on the 68000
 the library called by name, on ARM the operators from ARM state (`-marm`).
-It runs them in qemu, diffs the output against the host's, and checks that
-the library calls nothing.
+It runs them in qemu, diffs the output against the host's, checks that the
+library calls nothing and that division by zero traps.
 
     make CROSS_COMPILE=m68k-linux- NOLIBCDIR=path/to/nolibc test
     make CROSS_COMPILE=m68k-linux- NOLIBCDIR=path/to/nolibc bench

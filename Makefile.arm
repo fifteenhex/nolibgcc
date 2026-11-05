@@ -15,6 +15,9 @@ UAPIDIR ?= /usr/arm-linux-gnueabihf/include
 # tests are plain -static anyway.
 TEST_ARCH_CFLAGS = -fno-pie
 
+# The udf division by zero is SIGILL
+DIVZERO_SIG = 4
+
 # No lib test, __aeabi_uldivmod isn't callable from C; opsarm is ARM state
 TESTS = ops opsarm hdr hdr0
 TEST_opsarm = -DREF -marm

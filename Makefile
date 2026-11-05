@@ -87,6 +87,10 @@ $(O)tests/test-%.elf: $(D)tests/test.c $(NOLIBGCC_HEADERS) $(NOLIBGCC_LIB) $(NOL
 	@mkdir -p $(dir $@)
 	$(CC) $(TEST_CFLAGS) $(TEST_$*) -o $@ $< $(NOLIBGCC_LIB)
 
+$(O)tests/divzero.elf: $(D)tests/divzero.c $(NOLIBGCC_LIB) $(NOLIBGCC_MAKEFILES)
+	@mkdir -p $(dir $@)
+	$(CC) $(TEST_CFLAGS) -o $@ $< $(NOLIBGCC_LIB)
+
 # The library at -O0, where the compiler is least helpful
 O0_OBJS = $(addprefix $(O)tests/O0-,$(notdir $(NOLIBGCC_OBJS)))
 
@@ -100,12 +104,17 @@ $(O)tests/O0-%.o: $(D)$(NOLIBGCC_ARCH)/%.c $(NOLIBGCC_HEADERS) $(NOLIBGCC_MAKEFI
 NOCALLS = $(NOLIBGCC_OBJS) $(O0_OBJS) $(NOCALLS_ARCH)
 
 .PHONY: test
-test: $(O)tests/test.ref $(foreach t,$(TESTS),$(O)tests/test-$(t).elf) $(NOCALLS)
+test: $(O)tests/test.ref $(foreach t,$(TESTS),$(O)tests/test-$(t).elf) $(NOCALLS) \
+      $(O)tests/divzero.elf
 	@for o in $(NOCALLS); do \
 		c=`$(NM) -u $$o; $(OBJDUMP) -r $$o | grep -oE '$(NOLIBGCC_HELPERS)$$'`; \
 		test -z "$$c" || { echo "$$o calls:" $$c; exit 1; }; \
 	done
 	$(TEST_ARCH_CHECK)
+	@ulimit -c 0; for c in `sed -n "s/.*case '\(.\)'.*/\1/p" $(D)tests/divzero.c`; do \
+		$(QEMU) $(O)tests/divzero.elf $$c >/dev/null 2>&1; \
+		test $$? -eq $$((128 + $(DIVZERO_SIG))) || { echo "divzero $$c didn't trap"; exit 1; }; \
+	done
 	$(O)tests/test.ref > $(O)tests/test.ref.out
 	$(foreach t,$(TESTS),$(QEMU) $(O)tests/test-$(t).elf > $(O)tests/test-$(t).out &&) true
 	$(foreach t,$(TESTS),diff -u $(O)tests/test.ref.out $(O)tests/test-$(t).out &&) true

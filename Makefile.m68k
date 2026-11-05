@@ -18,6 +18,9 @@ UAPIDIR ?= /usr/m68k-linux-gnu/include
 # -fno-toplevel-reorder keeps them together.
 TEST_ARCH_CFLAGS = -fno-toplevel-reorder
 
+# divu.w by zero is SIGFPE
+DIVZERO_SIG = 8
+
 # Library by name, operators, header, header at -O0
 TESTS = lib ops hdr hdr0
 TEST_lib =
