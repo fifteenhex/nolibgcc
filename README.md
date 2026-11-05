@@ -9,15 +9,15 @@ This targets the 68000, which has no 32 bit multiply or divide, and only
 has the helpers that came up building
 [smolutils](https://github.com/fifteenhex/smolutils):
 
-| Function                                      | File      |
-|-----------------------------------------------|-----------|
-| `__mulsi3`                                    | mulsi3.c  |
-| `__divsi3` `__modsi3` `__udivsi3` `__umodsi3` | divsi3.c  |
-| `__muldi3`                                    | muldi3.c  |
-| `__divdi3` `__moddi3` `__udivdi3` `__umoddi3` | divdi3.c  |
-| `__ashldi3`                                   | ashldi3.c |
-| `__lshrdi3`                                   | lshrdi3.c |
-| `__ashrdi3`                                   | ashrdi3.c |
+| Function                                      | File           |
+|-----------------------------------------------|----------------|
+| `__mulsi3`                                    | m68k/mulsi3.c  |
+| `__divsi3` `__modsi3` `__udivsi3` `__umodsi3` | m68k/divsi3.c  |
+| `__muldi3`                                    | m68k/muldi3.c  |
+| `__divdi3` `__moddi3` `__udivdi3` `__umoddi3` | m68k/divdi3.c  |
+| `__ashldi3`                                   | m68k/ashldi3.c |
+| `__lshrdi3`                                   | m68k/lshrdi3.c |
+| `__ashrdi3`                                   | m68k/ashrdi3.c |
 
 To find out what a program needs, link it without the library and look at
 what's undefined:
@@ -76,8 +76,9 @@ divides by a variable and kib multiplies by a constant.
     make CROSS_COMPILE=m68k-linux-
 
 gives `libnolibgcc.a`, put it after everything else on the link line. The
-Makefile can be used from another directory with `-f` and the output put
-somewhere else with `O=`:
+architecture comes from the compiler, what's specific to one is in
+`Makefile.<arch>`. The Makefile can be used from another directory with
+`-f` and the output put somewhere else with `O=`:
 
     make -f path/to/nolibgcc/Makefile CROSS_COMPILE=m68k-linux- O=build/nolibgcc
 

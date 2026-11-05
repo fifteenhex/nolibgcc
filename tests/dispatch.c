@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 /*
- * Cases the header must do inline. Only compiled, never linked: nothing in
- * here may call anything.
+ * 68000 cases the header must do inline. Only compiled, never linked:
+ * nothing in here may call anything.
  */
 #include "../nolibgcc.h"
 
