@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 #
 # make CROSS_COMPILE=m68k-linux-
-# make -f nolibgcc/Makefile CROSS_COMPILE=m68k-linux- O=build/nolibgcc
+# make -f nolibgcc/Makefile CROSS_COMPILE=arm-linux-gnueabihf- O=build/nolibgcc
 # make CROSS_COMPILE=m68k-linux- NOLIBCDIR=... test
 
 NOLIBGCC_MAKEFILE := $(lastword $(MAKEFILE_LIST))
@@ -27,9 +27,9 @@ NM = $(CROSS_COMPILE)nm
 OBJDUMP = $(CROSS_COMPILE)objdump
 SIZE = $(CROSS_COMPILE)size
 
-# m68k-linux-gnu -> m68k
+# m68k-linux-gnu -> m68k, arm-linux-gnueabihf and armeb-... -> arm
 ifneq ($(CROSS_COMPILE),)
-NOLIBGCC_ARCH := $(firstword $(subst -, ,$(shell $(CC) -dumpmachine)))
+NOLIBGCC_ARCH := $(patsubst arm%,arm,$(firstword $(subst -, ,$(shell $(CC) -dumpmachine))))
 ifeq ($(wildcard $(D)Makefile.$(NOLIBGCC_ARCH)),)
 $(error nolibgcc doesn't support '$(NOLIBGCC_ARCH)' (from $(CC) -dumpmachine))
 endif

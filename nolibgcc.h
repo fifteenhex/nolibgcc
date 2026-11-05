@@ -4,8 +4,8 @@
 
 /*
  * Code can use the operators and link libnolibgcc.a, or call the
- * nolibgcc_*() functions below, which are inlined and take a cheaper path
- * when an operand is constant or known to be small.
+ * nolibgcc_*() functions, which are inlined and on the 68000 take a cheaper
+ * path when an operand is constant or known to be small.
  *
  * The library is built from this header. The nolibgcc__*() functions are
  * its implementations, not API. They mustn't use the operation they
@@ -28,8 +28,10 @@ typedef __UINT64_TYPE__ nolibgcc_u64;
 
 #if defined(__m68k__) && !defined(__mcoldfire__)
 #include "m68k/arch.h"
+#elif defined(__arm__)
+#include "arm/arch.h"
 #else
-#error "nolibgcc is for the 680x0"
+#error "nolibgcc is for the 680x0 and 32 bit ARM"
 #endif
 
 #endif
