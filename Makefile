@@ -42,8 +42,10 @@ endif
 
 # No LTO: calls to these only appear after LTO has run, too late to inline
 # them or to pull in an LTO'd archive member.
+# No stack protector: the helpers take the address of a local, which
+# -fstack-protector-strong guards with __stack_chk_guard and __stack_chk_fail.
 NOLIBGCC_CFLAGS = $(NOLIBGCC_CPU) $(NOLIBGCC_ARCH_CFLAGS) -Os -ffreestanding \
-		  -std=gnu99 -Wall -Wextra -ggdb
+		  -fno-stack-protector -std=gnu99 -Wall -Wextra -ggdb
 
 NOLIBGCC_OBJS = $(addprefix $(O)$(NOLIBGCC_ARCH)/,$(NOLIBGCC_SRCS:.c=.o))
 
