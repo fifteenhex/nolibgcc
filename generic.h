@@ -4,6 +4,12 @@
  * operators, left to the compiler and whatever library it calls.
  */
 
+/*
+ * INT_MIN / -1 is whatever the compiler does with it, tests/test.c skips it
+ * when this is defined
+ */
+#define NOLIBGCC_GENERIC
+
 NOLIBGCC_INLINE nolibgcc_u32 nolibgcc_mul32(nolibgcc_u32 a, nolibgcc_u32 b)
 {
 	return a * b;

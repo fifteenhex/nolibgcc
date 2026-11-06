@@ -24,9 +24,15 @@ TEST_ARCH_CFLAGS = -fno-toplevel-reorder
 # divu.w by zero is SIGFPE
 DIVZERO_SIG = 8
 
-# Library by name, operators, header, header at -O0
-TESTS = lib ops hdr hdr0
+# Library by name, operators, header, header at -O0, header on a 68040 with
+# only libgcc
+TESTS = lib ops hdr hdr0 hdr040
 TEST_lib =
+QEMU_hdr040 = $(subst m68000,m68040,$(QEMU))
+
+$(O)tests/test-hdr040.elf: $(D)tests/test.c $(NOLIBGCC_HEADERS) $(NOLIBGCC_MAKEFILES)
+	@mkdir -p $(dir $@)
+	$(CC) $(TEST_CFLAGS) -m68040 -DHDR -o $@ $< -lgcc
 
 # The header's inline cases at each level the README promises
 $(O)tests/dispatch-%.o: $(D)tests/dispatch.c $(NOLIBGCC_HEADERS) $(NOLIBGCC_MAKEFILES)

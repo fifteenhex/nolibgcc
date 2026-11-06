@@ -4,16 +4,18 @@
  * Built with -DREF for the host, and for the target either calling the
  * library directly (68000 only), with -DHDR using the header's functions,
  * or with -DREF using the operators so the compiler calls the library
- * itself. The outputs must be identical. Pass -v to print every result
- * instead of a hash.
+ * itself. -DHDR on the host checks the header's generic version. The
+ * outputs must be identical. Pass -v to print every result instead of a
+ * hash.
  *
  * The constant tests are there for the header: with a constant at the call
  * site it takes different paths.
  */
-#if defined(REF) && !defined(NOLIBC)
+#ifndef NOLIBC
 #include <stdio.h>
 #include <string.h>
-#elif defined(HDR)
+#endif
+#ifdef HDR
 #include "../nolibgcc.h"
 #endif
 
@@ -269,7 +271,8 @@ static void x_narrow(udi a, udi b)
  */
 static void intmin(void)
 {
-#if defined(REF) && !defined(NOLIBC)
+	/* Nor can the header where it's just the operators */
+#if (defined(REF) && !defined(NOLIBC)) || defined(NOLIBGCC_GENERIC)
 	printf("intmin ok\n");
 #else
 	/* volatile so the header can't see constants */

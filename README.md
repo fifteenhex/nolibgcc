@@ -118,7 +118,9 @@ for the target: the operators against the library built at -Os and at -O0,
 the header at -Os and at -O0, on the 68000 the library called by name, on
 ARM the operators from ARM state (`-marm`). It runs them in qemu, diffs the
 output against the host's, checks that the library calls nothing and that
-division by zero traps.
+division by zero traps. The header's generic version is also built for the
+host and, in the m68k test, for a 68040 linked against the toolchain's
+libgcc.
 
     make CROSS_COMPILE=m68k-linux- NOLIBCDIR=path/to/nolibc test
     make CROSS_COMPILE=m68k-linux- NOLIBCDIR=path/to/nolibc bench
