@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "../nolibgcc.h"
+#include "arch.h"
 
 /* One copy of the division for all four */
 static __attribute__((noinline))

@@ -55,20 +55,24 @@ known. `nolibgcc.h` has the same operations as inline functions:
 | `nolibgcc_udivmod32()` `nolibgcc_udivmod64()`              | both at once |
 | `nolibgcc_shl64()` `nolibgcc_lshr64()` `nolibgcc_ashr64()` | `<<` `>>`    |
 
-On the 68000, after inlining they can see which operands are constant or
-known to be small (`__builtin_constant_p`, at -O1 and up). A divisor known
-to fit in 16 bits is two divu.w, four for a 64 bit dividend; two 16 bit
-operands are one divu.w; a constant power of two is a shift. Anything else
-calls the library, except `nolibgcc_mul32()`, which is small enough to
-always inline; a constant the compiler can do in a few shifts and adds, and
-any constant shift count, are left to the compiler. `nolibgcc_mul64()` is
-just `*`.
+On the 68000 and 68010, after inlining they can see which operands are
+constant or known to be small (`__builtin_constant_p`, at -O1 and up). A
+divisor known to fit in 16 bits is two divu.w, four for a 64 bit dividend;
+two 16 bit operands are one divu.w; a constant power of two is a shift.
+Anything else calls the library, except `nolibgcc_mul32()`, which is small
+enough to always inline; a constant the compiler can do in a few shifts and
+adds, and any constant shift count, are left to the compiler.
+`nolibgcc_mul64()` is just `*`.
+
+Everywhere else the functions are just the operators and need what the
+operators need: libnolibgcc.a on ARM, the toolchain's libgcc or nothing on
+other CPUs.
 
 ARM has a 32x32->64 multiply, so with GCC 16 the compiler does division by
 a constant itself when it thinks that's worth it: at -O2 always for 32 bit
 and for small constants for 64 bit (`/ 10` but not `/ 1000`); at -Os much
 less (32 bit `/ 10` is inline, `/ 7` and `% 10` are calls, 64 bit always
-is). The header's functions are just the operators.
+is).
 
 On the 68000 `make bench` runs some typical uses written both ways in qemu
 and counts the instructions per call (insns), and how many of them are

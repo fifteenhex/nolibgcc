@@ -31,11 +31,11 @@ SIZE = $(CROSS_COMPILE)size
 ifneq ($(CROSS_COMPILE),)
 NOLIBGCC_ARCH := $(patsubst arm%,arm,$(firstword $(subst -, ,$(shell $(CC) -dumpmachine))))
 ifeq ($(wildcard $(D)Makefile.$(NOLIBGCC_ARCH)),)
-$(error nolibgcc doesn't support '$(NOLIBGCC_ARCH)' (from $(CC) -dumpmachine))
+$(error no library for '$(NOLIBGCC_ARCH)' (from $(CC) -dumpmachine), only the header)
 endif
 # Makefile.<arch> uses these in prerequisites, which make expands as it reads them
 NOLIBGCC_MAKEFILES = $(NOLIBGCC_MAKEFILE) $(D)Makefile.$(NOLIBGCC_ARCH)
-NOLIBGCC_HEADERS = $(D)nolibgcc.h $(D)$(NOLIBGCC_ARCH)/arch.h
+NOLIBGCC_HEADERS = $(D)nolibgcc.h $(D)generic.h $(D)$(NOLIBGCC_ARCH)/arch.h
 NOLIBGCC_LIB = $(O)libnolibgcc.a
 include $(D)Makefile.$(NOLIBGCC_ARCH)
 endif

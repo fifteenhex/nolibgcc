@@ -4,6 +4,9 @@
 # divide and no need for this.
 
 NOLIBGCC_CPU ?= -m68000
+ifneq ($(filter-out -m68000 -m68010,$(NOLIBGCC_CPU)),)
+$(error the 68000 library is -m68000 or -m68010, not '$(NOLIBGCC_CPU)')
+endif
 # -mpcrel: position independent, usable from PIE programs, without the GOT
 # -fpie would use.
 NOLIBGCC_ARCH_CFLAGS = -mpcrel
