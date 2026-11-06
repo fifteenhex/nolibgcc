@@ -31,11 +31,11 @@ SIZE = $(CROSS_COMPILE)size
 ifneq ($(CROSS_COMPILE),)
 NOLIBGCC_ARCH := $(patsubst arm%,arm,$(firstword $(subst -, ,$(shell $(CC) -dumpmachine))))
 ifeq ($(wildcard $(D)Makefile.$(NOLIBGCC_ARCH)),)
-$(error nolibgcc doesn't support '$(NOLIBGCC_ARCH)' (from $(CC) -dumpmachine))
+$(error no library for '$(NOLIBGCC_ARCH)' (from $(CC) -dumpmachine), only the header)
 endif
 # Makefile.<arch> uses these in prerequisites, which make expands as it reads them
 NOLIBGCC_MAKEFILES = $(NOLIBGCC_MAKEFILE) $(D)Makefile.$(NOLIBGCC_ARCH)
-NOLIBGCC_HEADERS = $(D)nolibgcc.h $(D)$(NOLIBGCC_ARCH)/arch.h
+NOLIBGCC_HEADERS = $(D)nolibgcc.h $(D)generic.h $(D)$(NOLIBGCC_ARCH)/arch.h
 NOLIBGCC_LIB = $(O)libnolibgcc.a
 include $(D)Makefile.$(NOLIBGCC_ARCH)
 endif
@@ -73,6 +73,11 @@ HOSTCC ?= gcc
 $(O)tests/test.ref: $(D)tests/test.c $(NOLIBGCC_MAKEFILE)
 	@mkdir -p $(dir $@)
 	$(HOSTCC) -O2 -Wall -Wextra -DREF -o $@ $<
+
+# The header's generic version on the host
+$(O)tests/test.hosthdr: $(D)tests/test.c $(D)nolibgcc.h $(D)generic.h $(NOLIBGCC_MAKEFILE)
+	@mkdir -p $(dir $@)
+	$(HOSTCC) -O2 -Wall -Wextra -DHDR -o $@ $<
 
 TEST_CFLAGS = $(NOLIBGCC_CPU) -Os -static -nostdlib -fno-builtin -std=gnu99 \
 	      -Wall -Wextra $(TEST_ARCH_CFLAGS) \
@@ -115,8 +120,8 @@ TESTS += opsO0
 NOCALLS = $(NOLIBGCC_OBJS) $(O0_OBJS) $(NOCALLS_ARCH)
 
 .PHONY: test
-test: $(O)tests/test.ref $(foreach t,$(TESTS),$(O)tests/test-$(t).elf) $(NOCALLS) \
-      $(O)tests/divzero.elf
+test: $(O)tests/test.ref $(O)tests/test.hosthdr \
+      $(foreach t,$(TESTS),$(O)tests/test-$(t).elf) $(NOCALLS) $(O)tests/divzero.elf
 	@for o in $(NOCALLS); do \
 		c=`$(NM) -u $$o; $(OBJDUMP) -r $$o | grep -oE '$(NOLIBGCC_HELPERS)$$'`; \
 		test -z "$$c" || { echo "$$o calls:" $$c; exit 1; }; \
@@ -127,12 +132,15 @@ test: $(O)tests/test.ref $(foreach t,$(TESTS),$(O)tests/test-$(t).elf) $(NOCALLS
 		test $$? -eq $$((128 + $(DIVZERO_SIG))) || { echo "divzero $$c didn't trap"; exit 1; }; \
 	done
 	$(O)tests/test.ref > $(O)tests/test.ref.out
-	$(foreach t,$(TESTS),$(QEMU) $(O)tests/test-$(t).elf > $(O)tests/test-$(t).out &&) true
+	$(O)tests/test.hosthdr > $(O)tests/test.hosthdr.out
+	diff -u $(O)tests/test.ref.out $(O)tests/test.hosthdr.out
+	$(foreach t,$(TESTS),$(or $(QEMU_$(t)),$(QEMU)) $(O)tests/test-$(t).elf > $(O)tests/test-$(t).out &&) true
 	$(foreach t,$(TESTS),diff -u $(O)tests/test.ref.out $(O)tests/test-$(t).out &&) true
 	@echo PASS
 
 .PHONY: clean
 clean:
-	rm -f $(O)*.a $(O)*/*.o $(O)tests/*.a $(O)tests/test.ref $(O)tests/*.elf \
+	rm -f $(O)*.a $(O)*/*.o $(O)tests/*.a $(O)tests/test.ref $(O)tests/test.hosthdr \
+		$(O)tests/*.elf \
 		$(O)tests/*.out
 	$(if $(filter-out $(D),$(O)),rmdir $(O)*/ $(O) 2>/dev/null || true)

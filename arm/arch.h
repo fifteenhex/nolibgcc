@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 /*
- * 32 bit ARM: ARM state from ARMv5TE, or Thumb-2 (clz, ldrd). Included from
- * nolibgcc.h.
+ * The library's 32 bit ARM code: ARM state from ARMv5TE, or Thumb-2 (clz,
+ * ldrd). Included by the arm/ sources after nolibgcc.h.
  */
 
 #if !(defined(__thumb2__) || \
@@ -101,87 +101,4 @@ NOLIBGCC_INLINE nolibgcc_u64 nolibgcc__udivmod64(nolibgcc_u64 n, nolibgcc_u64 d,
 
 	*rem = n;
 	return q;
-}
-
-/* The API: just the operators, the compiler does what it can with a constant */
-
-NOLIBGCC_INLINE nolibgcc_u32 nolibgcc_mul32(nolibgcc_u32 a, nolibgcc_u32 b)
-{
-	return a * b;
-}
-
-NOLIBGCC_INLINE nolibgcc_u32 nolibgcc_udivmod32(nolibgcc_u32 n, nolibgcc_u32 d,
-						nolibgcc_u32 *rem)
-{
-	if (rem)
-		*rem = n % d;
-	return n / d;
-}
-
-NOLIBGCC_INLINE nolibgcc_u32 nolibgcc_udiv32(nolibgcc_u32 n, nolibgcc_u32 d)
-{
-	return n / d;
-}
-
-NOLIBGCC_INLINE nolibgcc_u32 nolibgcc_umod32(nolibgcc_u32 n, nolibgcc_u32 d)
-{
-	return n % d;
-}
-
-NOLIBGCC_INLINE nolibgcc_s32 nolibgcc_div32(nolibgcc_s32 n, nolibgcc_s32 d)
-{
-	return n / d;
-}
-
-NOLIBGCC_INLINE nolibgcc_s32 nolibgcc_mod32(nolibgcc_s32 n, nolibgcc_s32 d)
-{
-	return n % d;
-}
-
-NOLIBGCC_INLINE nolibgcc_u64 nolibgcc_mul64(nolibgcc_u64 a, nolibgcc_u64 b)
-{
-	return a * b;
-}
-
-NOLIBGCC_INLINE nolibgcc_u64 nolibgcc_udivmod64(nolibgcc_u64 n, nolibgcc_u64 d,
-						nolibgcc_u64 *rem)
-{
-	if (rem)
-		*rem = n % d;
-	return n / d;
-}
-
-NOLIBGCC_INLINE nolibgcc_u64 nolibgcc_udiv64(nolibgcc_u64 n, nolibgcc_u64 d)
-{
-	return n / d;
-}
-
-NOLIBGCC_INLINE nolibgcc_u64 nolibgcc_umod64(nolibgcc_u64 n, nolibgcc_u64 d)
-{
-	return n % d;
-}
-
-NOLIBGCC_INLINE nolibgcc_s64 nolibgcc_div64(nolibgcc_s64 n, nolibgcc_s64 d)
-{
-	return n / d;
-}
-
-NOLIBGCC_INLINE nolibgcc_s64 nolibgcc_mod64(nolibgcc_s64 n, nolibgcc_s64 d)
-{
-	return n % d;
-}
-
-NOLIBGCC_INLINE nolibgcc_u64 nolibgcc_shl64(nolibgcc_u64 a, int b)
-{
-	return a << b;
-}
-
-NOLIBGCC_INLINE nolibgcc_u64 nolibgcc_lshr64(nolibgcc_u64 a, int b)
-{
-	return a >> b;
-}
-
-NOLIBGCC_INLINE nolibgcc_s64 nolibgcc_ashr64(nolibgcc_s64 a, int b)
-{
-	return a >> b;
 }

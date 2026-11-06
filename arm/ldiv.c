@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "../nolibgcc.h"
+#include "arch.h"
 
 /*
  * used: nothing in C references divmod, and udivmod's name has to survive
